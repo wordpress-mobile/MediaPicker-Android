@@ -123,14 +123,14 @@ public class MediaPickerFragment extends Fragment
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        setDefaultTextValues(true);
-
         // If this is not being restored from a previous state use arguments to set state
         if (savedInstanceState == null) {
             savedInstanceState = getArguments();
         }
 
         restoreFromBundle(savedInstanceState);
+
+        setDefaultTextValues();
     }
 
     @Override
@@ -142,11 +142,18 @@ public class MediaPickerFragment extends Fragment
         int viewToInflate = mCustomLayout < 0 ? DEFAULT_VIEW : mCustomLayout;
         View mediaPickerView = inflater.inflate(viewToInflate, container, false);
         if (mediaPickerView != null) {
-            mEmptyView = (TextView) mediaPickerView.findViewById(R.id.media_empty_view);
-            if (mMediaSources.size() == 0) {
-                updateEmptyView(getString(R.string.no_media_sources));
+            if (mEmptyView == null) {
+                mEmptyView = (TextView) mediaPickerView.findViewById(R.id.media_empty_view);
+                if (mMediaSources.size() == 0) {
+                    updateEmptyView(getString(R.string.no_media_sources));
+                } else {
+                    updateEmptyView(mLoadingText);
+                }
             } else {
-                updateEmptyView(mLoadingText);
+                mEmptyView = (TextView) mediaPickerView.findViewById(R.id.media_empty_view);
+                if (mAdapter.getCount() == 0) {
+                    updateEmptyView(mEmptyText);
+                }
             }
 
             mAdapterView = (AbsListView) mediaPickerView.findViewById(R.id.media_adapter_view);
@@ -500,14 +507,11 @@ public class MediaPickerFragment extends Fragment
 
     /**
      * Sets the default empty text strings if they are not already set to something.
-     *
-     * @param overwrite
-     * true to overwrite any existing values
      */
-    private void setDefaultTextValues(boolean overwrite) {
-        if (mLoadingText == null || overwrite) setLoadingText(R.string.fetching_media);
-        if (mEmptyText == null || overwrite) setEmptyText(R.string.no_media);
-        if (mErrorText == null || overwrite) setErrorText(R.string.error_fetching_media);
+    private void setDefaultTextValues() {
+        if (mLoadingText == null) setLoadingText(R.string.fetching_media);
+        if (mEmptyText == null) setEmptyText(R.string.no_media);
+        if (mErrorText == null) setErrorText(R.string.error_fetching_media);
     }
 
     /**
