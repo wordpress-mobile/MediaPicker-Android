@@ -12,7 +12,7 @@ apply plugin: 'robolectric'
 apply plugin: 'maven'
 apply plugin: 'signing'
 
-version = "1.2.0"
+version = "1.2.1"
 group = "org.wordpress"
 archivesBaseName = "mediapicker"
 
@@ -44,8 +44,8 @@ android {
     defaultConfig {
         minSdkVersion 14
         targetSdkVersion 22
-        versionCode 7
-        versionName "1.2.0"
+        versionCode 8
+        versionName "1.2.1"
     }
 
     buildTypes {
