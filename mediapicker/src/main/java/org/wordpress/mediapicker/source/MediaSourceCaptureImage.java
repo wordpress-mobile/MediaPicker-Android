@@ -142,7 +142,7 @@ public class MediaSourceCaptureImage implements MediaSource, Camera.PictureCallb
                                 height,
                                 mediaItem.getRotation());
                 imageView.setTag(bgDownload);
-                bgDownload.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, imageSource);
+                bgDownload.executeWithLimit(imageSource);
             } else {
                 MediaUtils.fadeInImage(imageView, imageBitmap);
             }

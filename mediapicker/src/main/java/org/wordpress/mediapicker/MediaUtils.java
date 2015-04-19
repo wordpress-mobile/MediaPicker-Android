@@ -18,8 +18,10 @@ import com.android.volley.toolbox.ImageLoader;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 public class MediaUtils {
     private static final long FADE_TIME_MS = 250;
@@ -120,7 +122,7 @@ public class MediaUtils {
                                 height,
                                 mediaItem.getRotation());
                 imageView.setTag(bgDownload);
-                bgDownload.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, imageSource);
+                bgDownload.executeWithLimit(imageSource);
             } else {
                 fadeInImage(imageView, imageBitmap);
             }
@@ -134,20 +136,23 @@ public class MediaUtils {
         public static final int TYPE_IMAGE = 0;
         public static final int TYPE_VIDEO = 1;
 
-        private static final int MAX_ACTIVE_FETCHES_DEFAULT = 32;
-        private static final List<BackgroundFetchThumbnail> sActiveFetches = new ArrayList<>();
+        // Due to a limited queue size of 128 we want to limit the number of background tasks
+        private static final int MAX_FETCHES = 16;
+        private static final Queue<BackgroundFetchThumbnail> sFetchQueue = new LinkedList<>();
+
+        private static int sNumFetching = 0;
 
         private WeakReference<ImageView> mReference;
         private ImageLoader.ImageCache mCache;
+        private Uri mImageSource;
         private int mType;
         private int mWidth;
         private int mHeight;
         private int mRotation;
-        private int mMaxFetches;
 
         public BackgroundFetchThumbnail(ImageView resultStore, ImageLoader.ImageCache cache, int type, int width, int height, int rotation) {
             mReference = new WeakReference<>(resultStore);
-            mMaxFetches = MAX_ACTIVE_FETCHES_DEFAULT;
+            mImageSource = null;
             mCache = cache;
             mType = type;
             mWidth = width;
@@ -157,13 +162,7 @@ public class MediaUtils {
 
         @Override
         protected void onPreExecute() {
-            super.onPreExecute();
-
-            if (sActiveFetches.size() > mMaxFetches) {
-                sActiveFetches.remove(0).cancel(true);
-            }
-
-            sActiveFetches.add(this);
+            ++sNumFetching;
         }
 
         @Override
@@ -197,6 +196,45 @@ public class MediaUtils {
             return bitmap;
         }
 
+        @Override
+        protected void onPostExecute(Bitmap result) {
+            --sNumFetching;
+
+            ImageView imageView = mReference.get();
+
+            if (imageView != null) {
+                if (imageView.getTag() == this) {
+                    imageView.setTag(null);
+                    if (result == null) {
+                        imageView.setImageResource(R.drawable.ic_now_wallpaper_white);
+                    } else {
+                        fadeInImage(imageView, result);
+                    }
+                }
+            }
+
+            if (sNumFetching < MAX_FETCHES && sFetchQueue.size() > 0) {
+                BackgroundFetchThumbnail next = sFetchQueue.remove();
+
+                if (next != null) {
+                    next.executeOnExecutor(THREAD_POOL_EXECUTOR, next.mImageSource);
+                }
+            }
+        }
+
+        public void executeWithLimit(Uri imageSource) {
+            mImageSource = imageSource;
+            startExclusiveExecution();
+        }
+
+        private void startExclusiveExecution() {
+            if (sNumFetching < MAX_FETCHES) {
+                executeOnExecutor(THREAD_POOL_EXECUTOR, mImageSource);
+            } else {
+                sFetchQueue.add(this);
+            }
+        }
+
         // http://developer.android.com/training/displaying-bitmaps/load-bitmap.html
         private int calculateInSampleSize(BitmapFactory.Options options) {
             // Raw height and width of image
@@ -218,28 +256,6 @@ public class MediaUtils {
             }
 
             return inSampleSize;
-        }
-
-        @Override
-        protected void onPostExecute(Bitmap result) {
-            sActiveFetches.remove(this);
-
-            ImageView imageView = mReference.get();
-
-            if (imageView != null) {
-                if (imageView.getTag() == this) {
-                    imageView.setTag(null);
-                    if (result == null) {
-                        imageView.setImageResource(R.drawable.ic_now_wallpaper_white);
-                    } else {
-                        fadeInImage(imageView, result);
-                    }
-                }
-            }
-        }
-
-        public void setMaxFetches(int maxFetches) {
-            mMaxFetches = maxFetches;
         }
     }
 
