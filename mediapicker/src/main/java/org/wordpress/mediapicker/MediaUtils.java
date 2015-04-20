@@ -132,19 +132,86 @@ public class MediaUtils {
         }
     }
 
-    public static class BackgroundFetchThumbnail extends AsyncTask<Uri, String, Bitmap> {
-        public static final int TYPE_IMAGE = 0;
-        public static final int TYPE_VIDEO = 1;
-
-        // Due to a limited queue size of 128 we want to limit the number of background tasks
+    /**
+     * Implementation of AsyncTask that limits the number of executions. Child classes must call
+     * super.* methods for all of onPreExecute/doInBackground/onPostExecute/onCancelled or none.
+     *
+     * Subclasses are passed a generic Object in performExecution and it is expected to be cast to
+     * the appropriate type when calling execute/executeOnExecutor.
+     */
+    public static abstract class LimitedBackgroundOperation<Params, Progress, Result>
+                                          extends AsyncTask<Params, Progress, Result> {
         private static final int MAX_FETCHES = 16;
-        private static final Queue<BackgroundFetchThumbnail> sFetchQueue = new LinkedList<>();
+        private static final Queue<LimitedBackgroundOperation> sFetchQueue = new LinkedList<>();
 
         private static int sNumFetching = 0;
 
+        private Params  mParams;
+        private boolean mHasPreExecuted;
+        private boolean mHasStartedExecuting;
+
+        @Override
+        protected void onPreExecute() {
+            ++sNumFetching;
+            mHasPreExecuted = true;
+        }
+
+        @Override
+        protected Result doInBackground(Params... params) {
+            if (!mHasPreExecuted) {
+                throw new IllegalStateException("super.onPreExecute must be invoked");
+            }
+            mHasStartedExecuting = true;
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Result result) {
+            if (!mHasStartedExecuting) {
+                throw new IllegalStateException("super.doInBackground must be invoked");
+            }
+            continueExclusiveExecution();
+        }
+
+        @Override
+        protected void onCancelled(Result result) {
+            if (!mHasStartedExecuting) {
+                throw new IllegalStateException("super.doInBackground must be invoked");
+            }
+            continueExclusiveExecution();
+        }
+
+        public abstract void performExecution(Object params);
+
+        public void executeWithLimit(Params params) {
+            mParams = params;
+            startExclusiveExecution();
+        }
+
+        private void startExclusiveExecution() {
+            if (sNumFetching < MAX_FETCHES) {
+                performExecution(mParams);
+            } else {
+                sFetchQueue.add(this);
+            }
+        }
+
+        private void continueExclusiveExecution() {
+            if (--sNumFetching < MAX_FETCHES && sFetchQueue.size() > 0) {
+                LimitedBackgroundOperation next = sFetchQueue.remove();
+                if (next != null) {
+                    next.performExecution(next.mParams);
+                }
+            }
+        }
+    }
+
+    public static class BackgroundFetchThumbnail extends LimitedBackgroundOperation<Uri, String, Bitmap> {
+        public static final int TYPE_IMAGE = 0;
+        public static final int TYPE_VIDEO = 1;
+
         private WeakReference<ImageView> mReference;
         private ImageLoader.ImageCache mCache;
-        private Uri mImageSource;
         private int mType;
         private int mWidth;
         private int mHeight;
@@ -152,7 +219,6 @@ public class MediaUtils {
 
         public BackgroundFetchThumbnail(ImageView resultStore, ImageLoader.ImageCache cache, int type, int width, int height, int rotation) {
             mReference = new WeakReference<>(resultStore);
-            mImageSource = null;
             mCache = cache;
             mType = type;
             mWidth = width;
@@ -161,12 +227,9 @@ public class MediaUtils {
         }
 
         @Override
-        protected void onPreExecute() {
-            ++sNumFetching;
-        }
-
-        @Override
         protected Bitmap doInBackground(Uri... params) {
+            super.doInBackground(params);
+
             String uri = params[0].toString();
             Bitmap bitmap = null;
 
@@ -198,7 +261,7 @@ public class MediaUtils {
 
         @Override
         protected void onPostExecute(Bitmap result) {
-            --sNumFetching;
+            super.onPostExecute(result);
 
             ImageView imageView = mReference.get();
 
@@ -212,27 +275,15 @@ public class MediaUtils {
                     }
                 }
             }
-
-            if (sNumFetching < MAX_FETCHES && sFetchQueue.size() > 0) {
-                BackgroundFetchThumbnail next = sFetchQueue.remove();
-
-                if (next != null) {
-                    next.executeOnExecutor(THREAD_POOL_EXECUTOR, next.mImageSource);
-                }
-            }
         }
 
-        public void executeWithLimit(Uri imageSource) {
-            mImageSource = imageSource;
-            startExclusiveExecution();
-        }
-
-        private void startExclusiveExecution() {
-            if (sNumFetching < MAX_FETCHES) {
-                executeOnExecutor(THREAD_POOL_EXECUTOR, mImageSource);
-            } else {
-                sFetchQueue.add(this);
+        @Override
+        public void performExecution(Object params) {
+            if (!(params instanceof Uri)) {
+                throw new IllegalStateException("Params must of type Uri");
             }
+
+            executeOnExecutor(THREAD_POOL_EXECUTOR, (Uri) params);
         }
 
         // http://developer.android.com/training/displaying-bitmaps/load-bitmap.html
