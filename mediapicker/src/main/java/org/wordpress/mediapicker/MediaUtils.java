@@ -136,7 +136,7 @@ public class MediaUtils {
      * Implementation of AsyncTask that limits the number of executions. Child classes must call
      * super.* methods for all of onPreExecute/doInBackground/onPostExecute/onCancelled or none.
      *
-     * Subclasses are passed a generic Object in performExecution and it is expected to be cast to
+     * Subclasses are passed a generic Object in startExecution and it is expected to be cast to
      * the appropriate type when calling execute/executeOnExecutor.
      */
     public static abstract class LimitedBackgroundOperation<Params, Progress, Result>
@@ -147,41 +147,44 @@ public class MediaUtils {
         private static int sNumFetching = 0;
 
         private Params  mParams;
-        private boolean mHasPreExecuted;
-        private boolean mHasStartedExecuting;
 
         @Override
-        protected void onPreExecute() {
+        protected final void onPreExecute() {
+            performPreExecute();
             ++sNumFetching;
-            mHasPreExecuted = true;
         }
 
         @Override
-        protected Result doInBackground(Params... params) {
-            if (!mHasPreExecuted) {
-                throw new IllegalStateException("super.onPreExecute must be invoked");
-            }
-            mHasStartedExecuting = true;
-            return null;
+        protected final Result doInBackground(Params... params) {
+            return performBackgroundOperation(params);
         }
 
         @Override
-        protected void onPostExecute(Result result) {
-            if (!mHasStartedExecuting) {
-                throw new IllegalStateException("super.doInBackground must be invoked");
-            }
+        protected final void onPostExecute(Result result) {
+            performPostExecute(result);
             continueExclusiveExecution();
         }
 
         @Override
-        protected void onCancelled(Result result) {
-            if (!mHasStartedExecuting) {
-                throw new IllegalStateException("super.doInBackground must be invoked");
-            }
+        protected final void onCancelled(Result result) {
+            performCancelled(result);
             continueExclusiveExecution();
         }
 
-        public abstract void performExecution(Object params);
+        protected void performPreExecute() {
+        }
+
+        // Required
+        protected abstract Result performBackgroundOperation(Params... params);
+
+        protected void performPostExecute(Result result) {
+        }
+
+        protected void performCancelled(Result result) {
+        }
+
+        // Should invoke execute or executeOnExecutor
+        public abstract void startExecution(Object params);
 
         public void executeWithLimit(Params params) {
             mParams = params;
@@ -190,7 +193,7 @@ public class MediaUtils {
 
         private void startExclusiveExecution() {
             if (sNumFetching < MAX_FETCHES) {
-                performExecution(mParams);
+                startExecution(mParams);
             } else {
                 sFetchQueue.add(this);
             }
@@ -200,7 +203,7 @@ public class MediaUtils {
             if (--sNumFetching < MAX_FETCHES && sFetchQueue.size() > 0) {
                 LimitedBackgroundOperation next = sFetchQueue.remove();
                 if (next != null) {
-                    next.performExecution(next.mParams);
+                    next.startExecution(next.mParams);
                 }
             }
         }
@@ -227,9 +230,7 @@ public class MediaUtils {
         }
 
         @Override
-        protected Bitmap doInBackground(Uri... params) {
-            super.doInBackground(params);
-
+        protected Bitmap performBackgroundOperation(Uri... params) {
             String uri = params[0].toString();
             Bitmap bitmap = null;
 
@@ -260,9 +261,7 @@ public class MediaUtils {
         }
 
         @Override
-        protected void onPostExecute(Bitmap result) {
-            super.onPostExecute(result);
-
+        protected void performPostExecute(Bitmap result) {
             ImageView imageView = mReference.get();
 
             if (imageView != null) {
@@ -278,9 +277,9 @@ public class MediaUtils {
         }
 
         @Override
-        public void performExecution(Object params) {
+        public void startExecution(Object params) {
             if (!(params instanceof Uri)) {
-                throw new IllegalStateException("Params must of type Uri");
+                throw new IllegalArgumentException("Params must of type Uri");
             }
 
             executeOnExecutor(THREAD_POOL_EXECUTOR, (Uri) params);
