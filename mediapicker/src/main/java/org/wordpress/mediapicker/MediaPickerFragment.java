@@ -581,12 +581,14 @@ public class MediaPickerFragment extends Fragment
      * view will be hidden. Otherwise the empty view will be hidden and the adapter view presented.
      */
     private void toggleEmptyVisibility() {
-        if (mAdapter.getCount() == 0) {
-            mEmptyView.setVisibility(View.VISIBLE);
-            mAdapterView.setVisibility(View.GONE);
-        } else {
-            mEmptyView.setVisibility(View.GONE);
-            mAdapterView.setVisibility(View.VISIBLE);
+        int empty = (mAdapter != null && mAdapter.getCount() == 0) ? View.VISIBLE : View.GONE;
+        int adapter = (mAdapter != null && mAdapter.getCount() == 0) ? View.GONE : View.VISIBLE;
+
+        if (mEmptyView != null) {
+            mEmptyView.setVisibility(empty);
+        }
+        if (mAdapterView != null) {
+            mAdapterView.setVisibility(adapter);
         }
     }
 

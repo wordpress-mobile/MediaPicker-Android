@@ -18,8 +18,10 @@ import com.android.volley.toolbox.ImageLoader;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 public class MediaUtils {
     private static final long FADE_TIME_MS = 250;
@@ -120,7 +122,7 @@ public class MediaUtils {
                                 height,
                                 mediaItem.getRotation());
                 imageView.setTag(bgDownload);
-                bgDownload.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, imageSource);
+                bgDownload.executeWithLimit(imageSource);
             } else {
                 fadeInImage(imageView, imageBitmap);
             }
@@ -130,12 +132,86 @@ public class MediaUtils {
         }
     }
 
-    public static class BackgroundFetchThumbnail extends AsyncTask<Uri, String, Bitmap> {
+    /**
+     * Implementation of AsyncTask that limits the number of executions. Child classes must call
+     * super.* methods for all of onPreExecute/doInBackground/onPostExecute/onCancelled or none.
+     *
+     * Subclasses are passed a generic Object in startExecution and it is expected to be cast to
+     * the appropriate type when calling execute/executeOnExecutor.
+     */
+    public static abstract class LimitedBackgroundOperation<Params, Progress, Result>
+                                          extends AsyncTask<Params, Progress, Result> {
+        private static final int MAX_FETCHES = 16;
+        private static final Queue<LimitedBackgroundOperation> sFetchQueue = new LinkedList<>();
+
+        private static int sNumFetching = 0;
+
+        private Params  mParams;
+
+        @Override
+        protected final void onPreExecute() {
+            performPreExecute();
+            ++sNumFetching;
+        }
+
+        @Override
+        protected final Result doInBackground(Params... params) {
+            return performBackgroundOperation(params);
+        }
+
+        @Override
+        protected final void onPostExecute(Result result) {
+            performPostExecute(result);
+            continueExclusiveExecution();
+        }
+
+        @Override
+        protected final void onCancelled(Result result) {
+            performCancelled(result);
+            continueExclusiveExecution();
+        }
+
+        protected void performPreExecute() {
+        }
+
+        // Required
+        protected abstract Result performBackgroundOperation(Params... params);
+
+        protected void performPostExecute(Result result) {
+        }
+
+        protected void performCancelled(Result result) {
+        }
+
+        // Should invoke execute or executeOnExecutor
+        public abstract void startExecution(Object params);
+
+        public void executeWithLimit(Params params) {
+            mParams = params;
+            startExclusiveExecution();
+        }
+
+        private void startExclusiveExecution() {
+            if (sNumFetching < MAX_FETCHES) {
+                startExecution(mParams);
+            } else {
+                sFetchQueue.add(this);
+            }
+        }
+
+        private void continueExclusiveExecution() {
+            if (--sNumFetching < MAX_FETCHES && sFetchQueue.size() > 0) {
+                LimitedBackgroundOperation next = sFetchQueue.remove();
+                if (next != null) {
+                    next.startExecution(next.mParams);
+                }
+            }
+        }
+    }
+
+    public static class BackgroundFetchThumbnail extends LimitedBackgroundOperation<Uri, String, Bitmap> {
         public static final int TYPE_IMAGE = 0;
         public static final int TYPE_VIDEO = 1;
-
-        private static final int MAX_ACTIVE_FETCHES_DEFAULT = 32;
-        private static final List<BackgroundFetchThumbnail> sActiveFetches = new ArrayList<>();
 
         private WeakReference<ImageView> mReference;
         private ImageLoader.ImageCache mCache;
@@ -143,11 +219,9 @@ public class MediaUtils {
         private int mWidth;
         private int mHeight;
         private int mRotation;
-        private int mMaxFetches;
 
         public BackgroundFetchThumbnail(ImageView resultStore, ImageLoader.ImageCache cache, int type, int width, int height, int rotation) {
             mReference = new WeakReference<>(resultStore);
-            mMaxFetches = MAX_ACTIVE_FETCHES_DEFAULT;
             mCache = cache;
             mType = type;
             mWidth = width;
@@ -156,18 +230,7 @@ public class MediaUtils {
         }
 
         @Override
-        protected void onPreExecute() {
-            super.onPreExecute();
-
-            if (sActiveFetches.size() > mMaxFetches) {
-                sActiveFetches.remove(0).cancel(true);
-            }
-
-            sActiveFetches.add(this);
-        }
-
-        @Override
-        protected Bitmap doInBackground(Uri... params) {
+        protected Bitmap performBackgroundOperation(Uri... params) {
             String uri = params[0].toString();
             Bitmap bitmap = null;
 
@@ -197,6 +260,31 @@ public class MediaUtils {
             return bitmap;
         }
 
+        @Override
+        protected void performPostExecute(Bitmap result) {
+            ImageView imageView = mReference.get();
+
+            if (imageView != null) {
+                if (imageView.getTag() == this) {
+                    imageView.setTag(null);
+                    if (result == null) {
+                        imageView.setImageResource(R.drawable.ic_now_wallpaper_white);
+                    } else {
+                        fadeInImage(imageView, result);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void startExecution(Object params) {
+            if (!(params instanceof Uri)) {
+                throw new IllegalArgumentException("Params must of type Uri");
+            }
+
+            executeOnExecutor(THREAD_POOL_EXECUTOR, (Uri) params);
+        }
+
         // http://developer.android.com/training/displaying-bitmaps/load-bitmap.html
         private int calculateInSampleSize(BitmapFactory.Options options) {
             // Raw height and width of image
@@ -218,28 +306,6 @@ public class MediaUtils {
             }
 
             return inSampleSize;
-        }
-
-        @Override
-        protected void onPostExecute(Bitmap result) {
-            sActiveFetches.remove(this);
-
-            ImageView imageView = mReference.get();
-
-            if (imageView != null) {
-                if (imageView.getTag() == this) {
-                    imageView.setTag(null);
-                    if (result == null) {
-                        imageView.setImageResource(R.drawable.ic_now_wallpaper_white);
-                    } else {
-                        fadeInImage(imageView, result);
-                    }
-                }
-            }
-        }
-
-        public void setMaxFetches(int maxFetches) {
-            mMaxFetches = maxFetches;
         }
     }
 
@@ -278,10 +344,18 @@ public class MediaUtils {
             newContent.setTitle("");
 
             if (imageDataColumnIndex != -1) {
-                newContent.setSource(Uri.parse(imageCursor.getString(imageDataColumnIndex)));
+                String imageSource = imageCursor.getString(imageDataColumnIndex);
+                if (imageSource == null) {
+                    return null;
+                }
+                newContent.setSource(Uri.parse(imageSource));
             }
             if (thumbnailData.containsKey(newContent.getTag())) {
-                newContent.setPreviewSource(Uri.parse(thumbnailData.get(newContent.getTag())));
+                String thumbnailSource = thumbnailData.get(newContent.getTag());
+                if (thumbnailSource == null) {
+                    return null;
+                }
+                newContent.setPreviewSource(Uri.parse(thumbnailSource));
             }
             if (imageOrientationColumnIndex != -1) {
                 newContent.setRotation(imageCursor.getInt(imageOrientationColumnIndex));
