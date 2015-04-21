@@ -345,10 +345,18 @@ public class MediaUtils {
             newContent.setTitle("");
 
             if (imageDataColumnIndex != -1) {
-                newContent.setSource(Uri.parse(imageCursor.getString(imageDataColumnIndex)));
+                String imageSource = imageCursor.getString(imageDataColumnIndex);
+                if (imageSource == null) {
+                    return null;
+                }
+                newContent.setSource(Uri.parse(imageSource));
             }
             if (thumbnailData.containsKey(newContent.getTag())) {
-                newContent.setPreviewSource(Uri.parse(thumbnailData.get(newContent.getTag())));
+                String thumbnailSource = thumbnailData.get(newContent.getTag());
+                if (thumbnailSource == null) {
+                    return null;
+                }
+                newContent.setPreviewSource(Uri.parse(thumbnailSource));
             }
             if (imageOrientationColumnIndex != -1) {
                 newContent.setRotation(imageCursor.getInt(imageOrientationColumnIndex));
