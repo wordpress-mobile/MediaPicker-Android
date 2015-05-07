@@ -321,10 +321,18 @@ public class MediaUtils {
             newContent.setTitle("");
 
             if (videoDataColumnIndex != -1) {
-                newContent.setSource(Uri.parse(videoCursor.getString(videoDataColumnIndex)));
+                String videoSource = videoCursor.getString(videoDataColumnIndex);
+                if (videoSource == null) {
+                    return null;
+                }
+                newContent.setSource(Uri.parse(videoSource));
             }
             if (thumbnailData.containsKey(newContent.getTag())) {
-                newContent.setPreviewSource(Uri.parse(thumbnailData.get(newContent.getTag())));
+                String thumbnailSource = thumbnailData.get(newContent.getTag());
+                if (thumbnailSource == null) {
+                    return null;
+                }
+                newContent.setPreviewSource(Uri.parse(thumbnailSource));
             }
         }
 
