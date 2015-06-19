@@ -21,7 +21,7 @@ repositories {
 }
 
 dependencies {
-    compile 'com.android.support:support-v13:22.0.0'
+    compile 'com.android.support:support-v13:22.2.0'
     compile 'com.mcxiaoke.volley:library:1.0.10'
 
     androidTestCompile 'junit:junit:4.10'
@@ -39,7 +39,7 @@ android {
     publishNonDefault true
 
     compileSdkVersion 22
-    buildToolsVersion "22.0.0"
+    buildToolsVersion "22.0.1"
 
     defaultConfig {
         minSdkVersion 14
