@@ -7,7 +7,7 @@ group = "org.wordpress"
 archivesBaseName = "mediapicker"
 
 dependencies {
-    compile 'com.android.support:support-v13:22.2.0'
+    compile 'com.android.support:support-v13:22.2.1'
     compile 'com.mcxiaoke.volley:library:1.0.10'
 
     testCompile 'junit:junit:4.12'
