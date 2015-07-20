@@ -240,23 +240,15 @@ public class MediaPickerFragment extends Fragment
         mode.setTitle(getActivity().getTitle());
         getActivity().onActionModeStarted(mode);
 
+        inflateActionModeMenu(menu);
+
         return true;
     }
 
     @Override
     public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
         notifyMediaSelectionStarted();
-
         mConfirmed = false;
-
-        MenuInflater menuInflater = getActivity().getMenuInflater();
-
-        if (mActionModeMenu != -1) {
-            menuInflater.inflate(mActionModeMenu, menu);
-            addSelectionConfirmationButtonMenuItem(menu);
-        } else {
-            menuInflater.inflate(R.menu.media_picker_action_mode, menu);
-        }
 
         return true;
     }
@@ -560,6 +552,23 @@ public class MediaPickerFragment extends Fragment
         mAdapterView.setOnItemClickListener(this);
         mAdapterView.setChoiceMode(AbsListView.CHOICE_MODE_MULTIPLE_MODAL);
         mAdapterView.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_OVERLAY);
+    }
+
+    /**
+     * Inflates custom mActionModeMenu if set, otherwise inflates default media_picker_action_mode.
+     *
+     * @param menu
+     * the menu to inflate to
+     */
+    private void inflateActionModeMenu(Menu menu) {
+        MenuInflater menuInflater = getActivity().getMenuInflater();
+
+        if (mActionModeMenu != -1) {
+            menuInflater.inflate(mActionModeMenu, menu);
+            addSelectionConfirmationButtonMenuItem(menu);
+        } else {
+            menuInflater.inflate(R.menu.media_picker_action_mode, menu);
+        }
     }
 
     /**
