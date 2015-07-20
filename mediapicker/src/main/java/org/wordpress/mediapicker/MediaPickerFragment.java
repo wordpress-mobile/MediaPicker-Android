@@ -239,7 +239,6 @@ public class MediaPickerFragment extends Fragment
     public boolean onCreateActionMode(ActionMode mode, Menu menu) {
         mode.setTitle(getActivity().getTitle());
         getActivity().onActionModeStarted(mode);
-
         inflateActionModeMenu(menu);
 
         return true;
