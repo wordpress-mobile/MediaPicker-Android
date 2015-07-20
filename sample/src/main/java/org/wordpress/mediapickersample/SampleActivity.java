@@ -1,6 +1,5 @@
 package org.wordpress.mediapickersample;
 
-import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.ActionBar;
@@ -8,6 +7,7 @@ import android.os.Bundle;
 
 import android.support.v13.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
+import android.support.v7.app.AppCompatActivity;
 import android.view.MenuItem;
 import android.widget.Toast;
 
@@ -27,7 +27,7 @@ import java.util.List;
  * Demonstrates the intended usage of the MediaPicker-Android library.
  */
 
-public class SampleActivity extends Activity
+public class SampleActivity extends AppCompatActivity
                             implements MediaPickerFragment.OnMediaSelected {
     private static final String TAB_TITLE_IMAGES = "Images";
     private static final String TAB_TITLE_VIDEOS = "Videos";
