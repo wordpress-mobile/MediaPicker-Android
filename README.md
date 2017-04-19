@@ -1,3 +1,7 @@
+# Deprecated
+
+Note: This library has been deprecated, support and maintainence will no longer be provided.
+
 # MediaPicker
 MediaPicker is an Android Fragment that allows capture and selection of media assets from a variety of sources.
 
